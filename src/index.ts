@@ -47,7 +47,8 @@ namespace Typhen {
         compilerOptions: compilerOptions,
         cwd: fileName.replace(/tsconfig.json$/, ''),
         typingDirectory: config.typingDirectory,
-        defaultLibFileName: config.defaultLibFileName
+        defaultLibFileName: config.defaultLibFileName,
+        sourcesToRebind: config.sourcesToRebind ? config.sourcesToRebind.map(srcRegex => new RegExp(srcRegex)) : [/.*/]
       });
     });
     return promises.reduce((p: any, fn: any) => p.then(fn));
@@ -59,7 +60,8 @@ namespace Typhen {
       src: src,
       dest: '',
       compilerOptions: compilerOptions,
-      noWrite: true
+      noWrite: true,
+      sourcesToRebind: [/.*/]
     });
     return new runner.Runner(parsingConfig).parse();
   }

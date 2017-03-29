@@ -7,6 +7,7 @@ export enum SymbolKind {
   Invalid,
   Module,
   EmptyType,
+  UnknownType,
   PrimitiveType,
   Enum,
   EnumMember,
@@ -320,6 +321,21 @@ export class PrimitiveType extends Type {
   }
 }
 
+export class UnknownType extends Type {
+  kind: SymbolKind = SymbolKind.UnknownType;
+  get isGenerationTarget(): boolean { return true; }
+
+  initialize(rawName: string): UnknownType {
+    this.rawName = rawName;
+    return this;
+  }
+
+  validate(): void | string {
+    if (this.config.plugin.disallow.any && this.rawName === 'any') {
+      return 'Disallow to define the any type';
+    }
+  }
+}
 export class Enum extends Type {
   kind: SymbolKind = SymbolKind.Enum;
 
@@ -462,6 +478,14 @@ export class TypeReference {
     const type = this.rawTypeArguments[index];
     return type.isTypeParameter ? null : type;
   }
+
+  addTypeArgument(type: Type) {
+    this.rawTypeArguments.push(type);
+  }
+
+  getUnboundTypeParameters() {
+    return this.typeParameters.slice(this.typeArguments.length);
+  }
 }
 
 export class Interface extends ObjectLikeType {
@@ -476,10 +500,11 @@ export class Interface extends ObjectLikeType {
   isAbstract: boolean = false;
 
   get isGenericType(): boolean { return this.typeParameters.length > 0; }
-  get typeParameters(): Type[] { return this.typeReference.typeParameters; }
-  get typeArguments(): Type[] { return this.typeReference.typeArguments; }
+  get typeParameters(): Type[] { return this.typeReference ? this.typeReference.typeParameters : []; }
+  get typeArguments(): Type[] { return this.typeReference ? this.typeReference.typeArguments : []; }
 
   get assumedName(): string {
+    // console.log('=======================START', this.rawName);
     if (this.typeArguments.length === 0) { return ''; }
 
     return this.rawName + this.typeArguments.map((type, index) => {

@@ -13,6 +13,7 @@ export interface TSConfigTyphenObject {
   files?: string | string[];
   typingDirectory?: string;
   defaultLibFileName?: string;
+  sourcesToRebind?: string[];
 }
 
 export interface ConfigObject {
@@ -25,6 +26,8 @@ export interface ConfigObject {
   env?: Environment;
   noWrite?: boolean;
   compilerOptions?: ts.CompilerOptions;
+  sourcesToRebind?: RegExp[];
+
 }
 
 export class Config implements ConfigObject {
@@ -38,6 +41,7 @@ export class Config implements ConfigObject {
   noWrite: boolean;
   compilerOptions: ts.CompilerOptions;
   compilerHost: CompilerHost;
+  sourcesToRebind: RegExp[] =  [/.*/];
 
   constructor(args: ConfigObject) {
     this.compilerOptions = <ts.CompilerOptions>_.defaults({}, args.compilerOptions, {

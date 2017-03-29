@@ -1,123 +1,125 @@
 /* tslint:disable: no-unused-variable class-name */
 
-/// <reference path="./color/color.d.ts" />
-
-declare function emitLog(text: string): void;
+// declare function emitLog(text: string): void;
 
 interface integer {}
 
 declare module Type {
+  interface SimpleResponse<T> { (error: Error, response?: T): void; }
+  interface TypedInterface<T> {
+    type: T;
+  }
   interface Range<T> {
     start: T;
     end: T;
+    do(done: SimpleResponse<TypedInterface<T>>): void
   }
 
-  interface Point {
-    readonly x: number;
-    readonly y: number;
-    set(x: number, y: number): void;
-    set(args: [number, number]): void;
-    new(x: number, y: number): Point;
-    new(args: [number, number]): Point;
-    new(...variadicArgs: number[]): Point;
+  interface RangeChildNumber extends Range<number> {
+    name: string;
+    otherWithString(cb: SimpleResponse<TypedInterface<string>>): void
   }
-
-  interface Square {
-    center: Point;
-    margin?: number;
-
-    /**
-     * Size from 1 to 5 (highest).
-     * @minimum 1
-     * @maximum 5
-     */
-    size: integer;
+  interface RangeChildString extends Range<string> {
+    name: string;
+    otherWithNumber(cb: SimpleResponse<TypedInterface<number>>): void
   }
+  // interface Point {
+  //   readonly x: number;
+  //   readonly y: number;
+  //   set(x: number, y: number): void;
+  //   set(args: [number, number]): void;
+  //   new(x: number, y: number): Point;
+  //   new(args: [number, number]): Point;
+  //   new(...variadicArgs: number[]): Point;
+  // }
 
-  interface ColoredSquare extends Square {
-    /**
-     * Default color is red.
-     * @default Color.Red
-     */
-    color: Color;
-    setColor(color: Color, callback?: (color: Color) => void): void;
-  }
+  // interface Square {
+  //   center: Point;
+  //   margin?: number;
 
-  interface SquareDictionary<T extends Square> {
-    readonly [stringIndex: string]: T;
-    [numberIndex: number]: T;
-  }
+  //   /**
+  //    * Size from 1 to 5 (highest).
+  //    * @minimum 1
+  //    * @maximum 5
+  //    */
+  //   size: integer;
+  // }
 
-  interface Transformer {
-    (squeare: Square, scale : number): void;
-  }
+  // interface ColoredSquare extends Square {
+  //   /**
+  //    * Default color is red.
+  //    * @default Color.Red
+  //    */
+  //   color: Color;
+  //   setColor(color: Color, callback?: (color: Color) => void): void;
+  // }
 
-  class Line {
-    color: Color;
-    protected constructor(src: Point, dest: Point);
-    setColor(color: Color, callback?: (color: Color) => void): void;
-    private ownColor;
-    protected draw(): void;
-  }
+  // interface SquareDictionary<T extends Square> {
+  //   readonly [stringIndex: string]: T;
+  //   [numberIndex: number]: T;
+  // }
 
-  class LineDrawer {
-    static lines: Line[];
-    static draw(src: Point, dest: Point): Line;
-  }
+  // interface Transformer {
+  //   (squeare: Square, scale : number): void;
+  // }
 
-  type time = number | Date;
+  // class Line {
+  //   color: Color;
+  //   protected constructor(src: Point, dest: Point);
+  //   setColor(color: Color, callback?: (color: Color) => void): void;
+  //   private ownColor;
+  //   protected draw(): void;
+  // }
 
-  interface Time {
-    now: time;
-  }
+  // class LineDrawer {
+  //   static lines: Line[];
+  //   static draw(src: Point, dest: Point): Line;
+  // }
 
-  abstract class AbstractClass {
-    abstract abstractMethod(): void;
-    abstract abstractProperty: number;
-  }
+  // type time = number | Date;
 
-  type Predicate<T> = (element: T) => boolean;
+  // interface Time {
+  //   now: time;
+  // }
 
-  interface A { a: string }
-  interface B { b: string }
-  interface C { c: string }
-  type IntersectionType = A & B & C;
+  // abstract class AbstractClass {
+  //   abstract abstractMethod(): void;
+  //   abstract abstractProperty: number;
+  // }
 
-  var ESSymbol: symbol;
+  // type Predicate<T> = (element: T) => boolean;
 
-  function classDecorator<TFunction extends Function>(target: TFunction): TFunction;
+  // interface A { a: string }
+  // interface B { b: string }
+  // interface C { c: string }
+  // type IntersectionType = A & B & C;
 
-  @classDecorator
-  class DecoratedClass {
-  }
+  // var ESSymbol: symbol;
 
-  interface Animal {
-    isCat(): this is Cat;
-  }
-  interface Cat extends Animal {
-  }
-  function isCat(a: any): a is Cat;
+  // function classDecorator<TFunction extends Function>(target: TFunction): TFunction;
 
-  let letString: string;
-  const constString: string;
+  // @classDecorator
+  // class DecoratedClass {
+  // }
 
-  namespace Namespace {}
+  // interface Animal {
+  //   isCat(): this is Cat;
+  // }
+  // interface Cat extends Animal {
+  // }
+  // function isCat(a: any): a is Cat;
 
-  type stringLiteralType = "foobar";
-  type booleanLiteralType = true;
-  type numberLiteralType = 100;
-  type nullType = null;
-  type neverType = never;
+  // let letString: string;
+  // const constString: string;
 
-  enum EnumLiterals { EnumLiteralA = 1, EnumLiteralB = 2, }
-  type enumLiteralType = EnumLiterals.EnumLiteralA;
+  // namespace Namespace {}
 
-  type MappedType<T> = {
-    readonly [P in keyof T]?: T[P];
-  };
-  interface MappedTypeParam {
-    property: number;
-    method(): boolean;
-  }
-  type RealMappedType = MappedType<MappedTypeParam>;
+  // type stringLiteralType = "foobar";
+  // type booleanLiteralType = true;
+  // type numberLiteralType = 100;
+  // type nullType = null;
+  // type neverType = never;
+
+  // enum EnumLiterals { EnumLiteralA = 1, EnumLiteralB = 2, }
+  // type enumLiteralType = EnumLiterals.EnumLiteralA;
 }

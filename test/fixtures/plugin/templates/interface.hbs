@@ -101,6 +101,25 @@ Name|Parameters (Name:TypeName:IsOptional:IsVariadic)|ReturnTypeName|IsOptional|
 {{else}}
 Methods is empty.
 {{/if}}
+--------------
+  {{#each methods}}
+    {{#each callSignatures}}
+    public {{ ../name}}({{#each parameters}}{{name}}: {{{type.fullName}}}{{#unless @last}}, {{/unless}}{{/each}}): {{returnType}} {
+      this.seneca.act({
+      {{~#each parameters}}
+
+        {{#unless @last}}{{name}}: {{name}},{{/unless}}
+
+      {{~/each~}}
+      }, (err, result) => {
+        done(err, result);
+      });
+    }
+    {{/each}}
+  {{/each}}
+
+
+
 
 ## Static Properties
 

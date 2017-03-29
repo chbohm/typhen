@@ -7,6 +7,16 @@ import * as logger from './logger';
 import * as config from './config';
 import * as Symbol from './symbol';
 
+
+let anySourceFileMatchesAnyRegex = (regexs: RegExp[], sourceFile: string) : boolean => {
+  let result = regexs.some(regex => regex.test(sourceFile));
+  console.log(regexs, sourceFile, result);
+
+  return result;
+};
+
+let anySourceFileMatches = _.curry(anySourceFileMatchesAnyRegex);
+
 export default class TypeScriptParser {
   private program: ts.Program;
   private typeChecker: ts.TypeChecker;
@@ -140,7 +150,7 @@ export default class TypeScriptParser {
   }
 
   private parseType(type: ts.Type): Symbol.Type {
-    if (this.typeCache.get(type) === undefined) {
+    if (this.typeCache.get(type) === undefined || this.shouldRebindTypeParameters(type)) {
       if (type.flags & ts.TypeFlags.TypeParameter) {
         this.parseTypeParameter(<ts.TypeParameter>type);
       } else if (type.flags & ts.TypeFlags.String) {
@@ -211,7 +221,7 @@ export default class TypeScriptParser {
           this.parseObjectType(<ts.ObjectType>type);
         } else {
           this.parseFunction(<ts.ObjectType>type);
-        }
+         }
       } else {
         throw this.makeErrorWithTypeInfo('Unsupported type', type);
       }
@@ -251,7 +261,7 @@ export default class TypeScriptParser {
   private createTyphenType<T extends Symbol.Type>(type: ts.Type,
       typhenTypeClass: typeof Symbol.Type, assumedNameSuffix?: string): T {
     if (this.typeCache.get(type)) {
-      throw this.makeErrorWithTypeInfo('Already created the type', type);
+      // throw this.makeErrorWithTypeInfo('Already created the type', type);
     }
     const typhenType = this.createTyphenSymbol<T>(type.symbol, typhenTypeClass, assumedNameSuffix);
     this.typeCache.set(type, typhenType);
@@ -529,6 +539,9 @@ export default class TypeScriptParser {
     const typeReference = new Symbol.TypeReference(typeParameters, typeArguments);
     this.typeReferenceStack.push(typeReference);
 
+    const baseTypes = this.typeChecker.getBaseTypes(genericType)
+      .map(t => <Symbol.Interface>this.parseType(t));
+
     const properties = genericType.getProperties()
         .filter(s => this.checkFlags(s.flags, ts.SymbolFlags.Property) && s.valueDeclaration !== undefined &&
             !this.checkModifiers(s.valueDeclaration.modifiers, ts.SyntaxKind.PrivateKeyword))
@@ -536,7 +549,7 @@ export default class TypeScriptParser {
     const rawMethods = genericType.getProperties()
         .filter(s => this.checkFlags(s.flags, ts.SymbolFlags.Method) && s.valueDeclaration !== undefined &&
             !this.checkModifiers(s.valueDeclaration.modifiers, ts.SyntaxKind.PrivateKeyword))
-        .map(s => this.parseMethod(s, _.includes(ownMemberNames, s.name)));
+        .map(s => this.parseMethod(s, _.includes(ownMemberNames, s.name), false, baseTypes));
     const methods = rawMethods.filter(m => m.name.indexOf('@@') !== 0);
     const builtInSymbolMethods = rawMethods.filter(m => m.name.indexOf('@@') === 0);
 
@@ -549,8 +562,6 @@ export default class TypeScriptParser {
       .map(s => this.parseSignature(s, 'Constructor'));
     const callSignatures = genericType.getCallSignatures().map(s => this.parseSignature(s));
 
-    const baseTypes = this.typeChecker.getBaseTypes(genericType)
-      .map(t => <Symbol.Interface>this.parseType(t));
 
     let staticProperties: Symbol.Property[] = [];
     let staticMethods: Symbol.Method[] = [];
@@ -580,7 +591,7 @@ export default class TypeScriptParser {
       staticMethods = staticMemberSymbols
         .filter(s => this.checkFlags(s.flags, ts.SymbolFlags.Method) && s.valueDeclaration !== undefined &&
           !this.checkModifiers(s.valueDeclaration.modifiers, ts.SyntaxKind.PrivateKeyword))
-        .map(s => this.parseMethod(s));
+        .map(s => this.parseMethod(s, true, false, baseTypes));
     }
 
     this.typeReferenceStack.pop();
@@ -679,6 +690,13 @@ export default class TypeScriptParser {
     return typhenType.initialize(name);
   }
 
+  private parseUnknownType(type: ts.Type): Symbol.PrimitiveType {
+    let name = type.symbol ? type.symbol.name : 'unknown';
+    // console.log('################   UnknownType : ', name, type.flags, type.symbol.flags);
+    let typhenType = this.createTyphenType<Symbol.UnknownType>(type, Symbol.UnknownType);
+    return typhenType.initialize(name);
+  }
+
   private parseTypeParameter(type: ts.TypeParameter): Symbol.TypeParameter {
     const typhenType = this.createTyphenType<Symbol.TypeParameter>(type, Symbol.TypeParameter);
     let constraint = type.constraint ? this.parseType(type.constraint) : null;
@@ -755,12 +773,13 @@ export default class TypeScriptParser {
     return typhenSymbol.initialize(propertyType, isOptional, isOwn, isProtected, isReadonly, isAbstract);
   }
 
-  private parseMethod(symbol: ts.Symbol, isOwn: boolean = true, isOptional: boolean = false): Symbol.Method {
+  private parseMethod(symbol: ts.Symbol, isOwn: boolean = true, isOptional: boolean = false, baseTypes?: Symbol.Interface[]
+): Symbol.Method {
     if (!symbol.valueDeclaration) {
       throw this.makeErrorWithSymbolInfo('Failed to parse method', symbol);
     }
     const type = this.typeChecker.getTypeAtLocation(symbol.valueDeclaration);
-    const callSignatures = type.getCallSignatures().map(s => this.parseSignature(s));
+    const callSignatures = type.getCallSignatures().map(s => this.parseSignature(s, 'Signature', baseTypes));
     isOptional = isOptional || (<ts.MethodDeclaration>symbol.valueDeclaration).questionToken != null;
     const isAbstract = this.checkModifiers(symbol.valueDeclaration.modifiers, ts.SyntaxKind.AbstractKeyword);
 
@@ -768,10 +787,10 @@ export default class TypeScriptParser {
     return typhenSymbol.initialize(callSignatures, isOptional, isOwn, isAbstract);
   }
 
-  private parseSignature(signature: ts.Signature, suffixName: string = 'Signature'): Symbol.Signature {
+  private parseSignature(signature: ts.Signature, suffixName: string = 'Signature', baseTypes?: Symbol.Interface[]): Symbol.Signature {
     const typeParameters = signature.typeParameters === undefined ? [] :
       signature.typeParameters.map(t => <Symbol.TypeParameter>this.parseType(t));
-    const parameters = signature.getParameters().map(s => this.parseParameter(s));
+    const parameters = signature.getParameters().map(s => this.parseParameter(s, baseTypes));
     const returnType = this.parseType(signature.getReturnType());
     const isProtected = this.checkModifiers(signature.declaration.modifiers, ts.SyntaxKind.ProtectedKeyword);
 
@@ -794,12 +813,60 @@ export default class TypeScriptParser {
     return new Symbol.TypePredicate(type, thisType, parameter);
   }
 
-  private parseParameter(symbol: ts.Symbol): Symbol.Parameter {
+  private getUnboundTypeParameters(type: Symbol.Type, callStack = 0): Symbol.Type[] {
+    let accumulator: Symbol.Type[] = [];
+    if (callStack < 2) {
+      let containerType = type as any as {typeReference?: Symbol.TypeReference};
+      if (containerType.typeReference) {
+        let unboundTypeParameters = containerType.typeReference.getUnboundTypeParameters();
+        accumulator.push(...unboundTypeParameters);
+        containerType.typeReference.typeArguments.forEach(t => {
+          accumulator.push(...this.getUnboundTypeParameters(t, ++callStack));
+        });
+
+      }
+    }
+    return accumulator.filter(t => !!t);
+  }
+  private rebindTypeParameters(type: Symbol.Type, typeName: string, typeArgument: Symbol.Type) {
+      let containerType = type as any as {typeReference?: Symbol.TypeReference};
+      if (containerType.typeReference && typeArgument) {
+        let unboundTypeParameters = containerType.typeReference.getUnboundTypeParameters();
+        if (unboundTypeParameters.length === 1 && unboundTypeParameters[0].rawName === typeName) {
+          console.log('rebinding type param', type.rawName, typeName, 'to', typeArgument.rawName);
+          containerType.typeReference.addTypeArgument(typeArgument);
+        }
+        containerType.typeReference.typeArguments.forEach(t => {
+          let unboundTypeParameters = this.getUnboundTypeParameters(t);
+          unboundTypeParameters.forEach(ubtp => {
+            this.rebindTypeParameters(t, typeName, typeArgument);
+          });
+        });
+      }
+  }
+
+  private parseParameter(symbol: ts.Symbol, baseTypes?: Symbol.Interface[]): Symbol.Parameter {
     if (!symbol.valueDeclaration) {
       throw this.makeErrorWithSymbolInfo('Failed to parse parameter', symbol);
     }
+
+
     const type = this.typeChecker.getTypeAtLocation(symbol.valueDeclaration);
     const parameterType = this.parseType(type);
+
+    if (baseTypes && this.shouldRebindTypeParameters(type)) {
+      let unboundTypeParameters = this.getUnboundTypeParameters(parameterType);
+      let baseTypeParams = baseTypes.map(bt => bt.typeParameters).reduce((tp1, tp2) => tp1.concat(tp2), []);
+      let baseTypeArgs = baseTypes.map(bt => bt.typeArguments).reduce((ta1, ta2) => ta1.concat(ta2), []);
+
+      let bindableTypes = _.zipObject(baseTypeParams.map(btp => btp.rawName), baseTypeArgs) as {[typeName: string]: Symbol.Type};
+      unboundTypeParameters.forEach(utp => {
+        this.rebindTypeParameters(parameterType, utp.rawName, bindableTypes[utp.rawName]);
+      });
+      // console.log('types to rebind: ',
+      //   unboundTypeParameters.map(utp => utp.rawName),
+      //   baseTypeParams.map(btp => btp.rawName), ' to ', baseTypeArgs.map(bta => bta.rawName));
+    }
 
     const valueDecl = (<ts.ParameterDeclaration>symbol.valueDeclaration);
     const isOptional = valueDecl.questionToken != null;
@@ -809,6 +876,13 @@ export default class TypeScriptParser {
     return typhenSymbol.initialize(parameterType, isOptional, isVariadic);
   }
 
+  private showFunction(fnc: Symbol.Function) {
+    // console.log('==============FUNCTION==========');
+    let parametertypes = fnc.callSignatures.map(cs => cs.parameters)
+        .reduce((p1, p2) => p2.concat(p1))
+        .map(p => p.type.rawName);
+    // console.log(' parameter types ', parametertypes);
+  }
   private parseVariable(symbol: ts.Symbol): Symbol.Variable {
     if (!symbol.valueDeclaration || !symbol.valueDeclaration.parent) {
       throw this.makeErrorWithSymbolInfo('Failed to parse variable', symbol);
@@ -835,4 +909,39 @@ export default class TypeScriptParser {
     const typhenSymbol = this.createTyphenSymbol<Symbol.TypeAlias>(symbol, Symbol.TypeAlias);
     return typhenSymbol.initialize(aliasedType);
   }
+  private mAnySourceFileMatches : (sourceFile: string) => boolean;
+  private get anySourceFileMatches() {
+    if (!this.mAnySourceFileMatches) {
+      this.mAnySourceFileMatches = _.memoize(anySourceFileMatches(this.config.sourcesToRebind));
+    }
+    return this.mAnySourceFileMatches;
+
+  }
+  private shouldRebindTypeParameters(type: ts.Type) {
+    let typhenType = this.typeCache.get(type);
+    let sourceFiles = typhenType.declarationInfos.map(di => di.fileName);
+    if (sourceFiles.length > 0 && !sourceFiles.some( this.anySourceFileMatches )) {
+      console.log('sourceFile excluded :', sourceFiles);
+      return false;
+    }
+    let result = false;
+    if (typhenType.kind === Symbol.SymbolKind.Interface) {
+      let fnc: Symbol.Function = typhenType as Symbol.Function;
+      if (typhenType.isGenericType) {
+        return true;
+      }
+      let paramKinds = fnc.callSignatures
+        .map(cs => cs.parameters)
+        .reduce((p1, p2) => p1.concat(p2), [])
+        .map(p => p.type).map(t => t.kind);
+      result = paramKinds.indexOf(Symbol.SymbolKind.TypeParameter) !== -1;
+    }
+    // if (result) {
+    //   console.log('=======containsTypeParameters=========', typhenType.rawName, typhenType.kind);
+    //   console.log('type %s containsTypeParameters: ', typhenType.rawName, result);
+    // }
+    return result;
+  }
+
+
 }
