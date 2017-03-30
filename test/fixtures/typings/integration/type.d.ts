@@ -9,20 +9,30 @@ declare module Type {
   interface TypedInterface<T> {
     type: T;
   }
-  interface Range<T> {
+  interface Range<T extends Shape> {
     start: T;
     end: T;
-    attributes?: Map<number, string>;
-    do(done: SimpleResponse<TypedInterface<T>>): void
+    do(arg: T, done: SimpleResponse<TypedInterface<T>>): void
+    doArray(arg: T[], done: SimpleResponse<TypedInterface<T[]>>): void
   }
 
-  interface RangeChildNumber extends Range<number> {
+  interface RangeChildNumber extends Range<Circle> {
     name: string;
     otherWithString(cb: SimpleResponse<TypedInterface<string>>): void
   }
-  interface RangeChildString extends Range<string> {
+  interface RangeChildString extends Range<Square> {
     name: string;
     otherWithNumber(cb: SimpleResponse<TypedInterface<number>>): void
+  }
+
+  interface Shape {
+    area: number;
+  }
+  interface Circle extends Shape {
+    radio: number;
+  }
+  interface Square extends Shape {
+    side: number;
   }
   // interface Point {
   //   readonly x: number;

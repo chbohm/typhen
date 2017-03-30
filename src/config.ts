@@ -41,7 +41,7 @@ export class Config implements ConfigObject {
   noWrite: boolean;
   compilerOptions: ts.CompilerOptions;
   compilerHost: CompilerHost;
-  sourcesToRebind: RegExp[] =  [/.*/];
+  sourcesToRebind: RegExp[];
 
   constructor(args: ConfigObject) {
     this.compilerOptions = <ts.CompilerOptions>_.defaults({}, args.compilerOptions, {
@@ -66,6 +66,7 @@ export class Config implements ConfigObject {
 
     this.plugin = args.plugin;
     this.noWrite = args.noWrite || false;
+    this.sourcesToRebind = args.sourcesToRebind ||  [/.*/];
     this.compilerHost = new CompilerHost(this.env);
   }
 

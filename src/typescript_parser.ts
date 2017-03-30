@@ -9,10 +9,7 @@ import * as Symbol from './symbol';
 
 
 let anySourceFileMatchesAnyRegex = (regexs: RegExp[], sourceFile: string) : boolean => {
-  let result = regexs.some(regex => regex.test(sourceFile));
-  console.log(regexs, sourceFile, result);
-
-  return result;
+  return regexs.some(regex => regex.test(sourceFile));
 };
 
 let anySourceFileMatches = _.curry(anySourceFileMatchesAnyRegex);
@@ -61,7 +58,6 @@ export default class TypeScriptParser {
 
   parse(): void {
     logger.debug('Loading the TypeScript files');
-    console.log(this.fileNames);
     this.program = ts.createProgram(this.fileNames, this.config.compilerOptions, this.config.compilerHost);
     this.typeChecker = this.program.getTypeChecker();
 
@@ -76,9 +72,7 @@ export default class TypeScriptParser {
     });
 
     logger.debug('Parsing the TypeScript symbols');
-    console.log('sourceFiles: ', this.sourceFiles.length);
     this.sourceFiles.forEach(s => {
-      console.log('parsing file: ', s.fileName);
       this.parseSourceFile(s);
     });
     this.types.forEach(t => {
@@ -553,7 +547,8 @@ export default class TypeScriptParser {
         .map(s => this.parseProperty(s, _.includes(ownMemberNames, s.name)));
     const rawMethods = genericType.getProperties()
         .filter(s => this.checkFlags(s.flags, ts.SymbolFlags.Method) && s.valueDeclaration !== undefined &&
-            !this.checkModifiers(s.valueDeclaration.modifiers, ts.SyntaxKind.PrivateKeyword))
+            !this.checkModifiers(s.valueDeclaration.modifiers, ts.SyntaxKind.PrivateKeyword) &&
+            !this.checkModifiers(s.valueDeclaration.modifiers, ts.SyntaxKind.ProtectedKeyword))
         .map(s => this.parseMethod(s, _.includes(ownMemberNames, s.name), false, baseTypes));
     const methods = rawMethods.filter(m => m.name.indexOf('@@') !== 0);
     const builtInSymbolMethods = rawMethods.filter(m => m.name.indexOf('@@') === 0);
@@ -818,27 +813,40 @@ export default class TypeScriptParser {
     return new Symbol.TypePredicate(type, thisType, parameter);
   }
 
-  private getUnboundTypeParameters(type: Symbol.Type, callStack = 0): Symbol.Type[] {
+  private getUnboundTypeParameters(type: Symbol.Type): Symbol.Type[] {
     let accumulator: Symbol.Type[] = [];
-    if (callStack < 2) {
-      let containerType = type as any as {typeReference?: Symbol.TypeReference};
-      if (containerType.typeReference) {
-        let unboundTypeParameters = containerType.typeReference.getUnboundTypeParameters();
-        accumulator.push(...unboundTypeParameters);
-        containerType.typeReference.typeArguments.forEach(t => {
-          accumulator.push(...this.getUnboundTypeParameters(t, ++callStack));
-        });
-
+    if (type.isTypeParameter) {
+        accumulator.push(type);
+    }
+    if (type.isArray) {
+      let arrayType = type as Symbol.Array;
+      if (arrayType.type.isTypeParameter) {
+        accumulator.push(arrayType.type);
       }
+    }
+    let containerType = type as any as {typeReference?: Symbol.TypeReference};
+    if (containerType.typeReference) {
+      let unboundTypeParameters = containerType.typeReference.getUnboundTypeParameters();
+      accumulator.push(...unboundTypeParameters);
+      containerType.typeReference.typeArguments.forEach(t => {
+        accumulator.push(...this.getUnboundTypeParameters(t));
+      });
     }
     return accumulator.filter(t => !!t);
   }
   private rebindTypeParameters(type: Symbol.Type, typeName: string, typeArgument: Symbol.Type) {
       let containerType = type as any as {typeReference?: Symbol.TypeReference};
+      if (type.isArray ) {
+        let arrayType = type as Symbol.Array;
+        if (arrayType.type.isTypeParameter && arrayType.type.rawName === typeName) {
+          arrayType.type = typeArgument;
+        }
+
+      }
       if (containerType.typeReference && typeArgument) {
         let unboundTypeParameters = containerType.typeReference.getUnboundTypeParameters();
         if (unboundTypeParameters.length === 1 && unboundTypeParameters[0].rawName === typeName) {
-          console.log('rebinding type param', type.rawName, typeName, 'to', typeArgument.rawName);
+          logger.debug('rebinding type param', type.rawName, typeName, 'to', typeArgument.rawName);
           containerType.typeReference.addTypeArgument(typeArgument);
         }
         containerType.typeReference.typeArguments.forEach(t => {
@@ -857,7 +865,7 @@ export default class TypeScriptParser {
 
 
     const type = this.typeChecker.getTypeAtLocation(symbol.valueDeclaration);
-    const parameterType = this.parseType(type);
+    let parameterType = this.parseType(type);
 
     if (baseTypes && this.shouldRebindTypeParameters(type)) {
       let unboundTypeParameters = this.getUnboundTypeParameters(parameterType);
@@ -866,7 +874,11 @@ export default class TypeScriptParser {
 
       let bindableTypes = _.zipObject(baseTypeParams.map(btp => btp.rawName), baseTypeArgs) as {[typeName: string]: Symbol.Type};
       unboundTypeParameters.forEach(utp => {
-        this.rebindTypeParameters(parameterType, utp.rawName, bindableTypes[utp.rawName]);
+        if (parameterType.isTypeParameter && bindableTypes[utp.rawName]) {
+          parameterType = bindableTypes[utp.rawName];
+        } else {
+          this.rebindTypeParameters(parameterType, utp.rawName, bindableTypes[utp.rawName]);
+        }
       });
       // console.log('types to rebind: ',
       //   unboundTypeParameters.map(utp => utp.rawName),
@@ -923,30 +935,28 @@ export default class TypeScriptParser {
 
   }
   private shouldRebindTypeParameters(type: ts.Type) {
-    return false;
-    // let typhenType = this.typeCache.get(type);
-    // let sourceFiles = typhenType.declarationInfos.map(di => di.fileName);
-    // if (sourceFiles.length > 0 && !sourceFiles.some( this.anySourceFileMatches )) {
-    //   console.log('sourceFile excluded :', sourceFiles);
-    //   return false;
+    let typhenType = this.typeCache.get(type);
+    let sourceFiles = typhenType.declarationInfos.map(di => di.fileName);
+    if (sourceFiles.length > 0 && !sourceFiles.some( this.anySourceFileMatches )) {
+      return false;
+    }
+    let result = false;
+    if (typhenType.isTypeParameter) {
+      return true;
+    }
+    if (typhenType.kind === Symbol.SymbolKind.Interface) {
+      let fnc: Symbol.Function = typhenType as Symbol.Function;
+      let paramKinds = fnc.callSignatures
+        .map(cs => cs.parameters)
+        .reduce((p1, p2) => p1.concat(p2), [])
+        .map(p => p.type).map(t => t.kind);
+      result = paramKinds.indexOf(Symbol.SymbolKind.TypeParameter) !== -1;
+    }
+    // if (result) {
+    //   console.log('=======containsTypeParameters=========', typhenType.rawName, typhenType.kind);
+    //   console.log('type %s containsTypeParameters: ', typhenType.rawName, result);
     // }
-    // let result = false;
-    // if (typhenType.kind === Symbol.SymbolKind.Interface) {
-    //   let fnc: Symbol.Function = typhenType as Symbol.Function;
-    //   if (typhenType.isGenericType) {
-    //     return true;
-    //   }
-    //   let paramKinds = fnc.callSignatures
-    //     .map(cs => cs.parameters)
-    //     .reduce((p1, p2) => p1.concat(p2), [])
-    //     .map(p => p.type).map(t => t.kind);
-    //   result = paramKinds.indexOf(Symbol.SymbolKind.TypeParameter) !== -1;
-    // }
-    // // if (result) {
-    // //   console.log('=======containsTypeParameters=========', typhenType.rawName, typhenType.kind);
-    // //   console.log('type %s containsTypeParameters: ', typhenType.rawName, result);
-    // // }
-    // return result;
+    return result;
   }
 
 

@@ -504,13 +504,16 @@ export class Interface extends ObjectLikeType {
   get typeArguments(): Type[] { return this.typeReference ? this.typeReference.typeArguments : []; }
 
   get assumedName(): string {
-    // console.log('=======================START', this.rawName);
     if (this.typeArguments.length === 0) { return ''; }
 
-    return this.rawName + this.typeArguments.map((type, index) => {
+    // console.log('=======================START', this.rawName);
+    let result = this.rawName + this.typeArguments.map((type, index) => {
       const prefix = index === 0 ? 'Of' : 'And';
+      // console.log('==', prefix + inflection.classify(type.name));
       return prefix + inflection.classify(type.name);
     }).join('');
+    // console.log('=======================END', this.rawName);
+    return result;
   }
 
   initialize(properties: Property[], methods: Method[], builtInSymbolMethods: Method[],
