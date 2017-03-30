@@ -12,6 +12,7 @@ declare module Type {
   interface Range<T> {
     start: T;
     end: T;
+    attributes?: Map<number, string>;
     do(done: SimpleResponse<TypedInterface<T>>): void
   }
 

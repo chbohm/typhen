@@ -1,6 +1,7 @@
 import '../test_helper';
 
 import * as fs from 'fs';
+import * as ts from 'typescript';
 import * as path from 'path';
 import * as childProcess from 'child_process';
 import * as _ from 'lodash';
@@ -66,7 +67,8 @@ describe('Integration Test', () => {
             src: 'test/fixtures/typings/integration/index.d.ts',
             dest: '.tmp/generated',
             compilerOptions: {
-              experimentalDecorators: true
+              experimentalDecorators: true,
+              target: ts.ScriptTarget.ES2016
             }
           }).done((files) => {
             generatedFiles = files;

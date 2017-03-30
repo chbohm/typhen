@@ -61,6 +61,7 @@ export default class TypeScriptParser {
 
   parse(): void {
     logger.debug('Loading the TypeScript files');
+    console.log(this.fileNames);
     this.program = ts.createProgram(this.fileNames, this.config.compilerOptions, this.config.compilerHost);
     this.typeChecker = this.program.getTypeChecker();
 
@@ -70,11 +71,14 @@ export default class TypeScriptParser {
     errors.forEach(d => {
       const info = d.file ? [d.file.fileName, '(', d.start, ',', d.length, '):'].join('') : '';
       logger.error(logger.red(info), d.messageText);
+      console.log(logger.red(info), d.messageText);
       throw new Error('Detect diagnostic messages of the TypeScript compiler');
     });
 
     logger.debug('Parsing the TypeScript symbols');
+    console.log('sourceFiles: ', this.sourceFiles.length);
     this.sourceFiles.forEach(s => {
+      console.log('parsing file: ', s.fileName);
       this.parseSourceFile(s);
     });
     this.types.forEach(t => {
@@ -202,7 +206,7 @@ export default class TypeScriptParser {
                 type.symbol === undefined) {
         return this.emptyType;
       } else if (type.symbol === undefined) {
-        throw this.makeErrorWithTypeInfo('Unsupported type', type);
+        this.parseUnknownType(type);
       } else if (type.symbol.flags & ts.SymbolFlags.Function) {
         this.parseFunction(<ts.ObjectType>type);
       } else if (type.symbol.flags & ts.SymbolFlags.Class) {
@@ -494,7 +498,8 @@ export default class TypeScriptParser {
   private parseIndexInfos(type: ts.InterfaceTypeWithDeclaredMembers):
       { stringIndex: Symbol.IndexInfo | null, numberIndex: Symbol.IndexInfo | null } {
     if (!type.symbol || !type.symbol.members) {
-      throw this.makeErrorWithTypeInfo('Failed to parse index info', type);
+      return {stringIndex: null, numberIndex: null};
+      // throw this.makeErrorWithTypeInfo('Failed to parse index info', type);
     }
     const indexSymbol = type.symbol.members.get('__index') || null;
     let stringIndex: Symbol.IndexInfo | null = null;
@@ -918,29 +923,30 @@ export default class TypeScriptParser {
 
   }
   private shouldRebindTypeParameters(type: ts.Type) {
-    let typhenType = this.typeCache.get(type);
-    let sourceFiles = typhenType.declarationInfos.map(di => di.fileName);
-    if (sourceFiles.length > 0 && !sourceFiles.some( this.anySourceFileMatches )) {
-      console.log('sourceFile excluded :', sourceFiles);
-      return false;
-    }
-    let result = false;
-    if (typhenType.kind === Symbol.SymbolKind.Interface) {
-      let fnc: Symbol.Function = typhenType as Symbol.Function;
-      if (typhenType.isGenericType) {
-        return true;
-      }
-      let paramKinds = fnc.callSignatures
-        .map(cs => cs.parameters)
-        .reduce((p1, p2) => p1.concat(p2), [])
-        .map(p => p.type).map(t => t.kind);
-      result = paramKinds.indexOf(Symbol.SymbolKind.TypeParameter) !== -1;
-    }
-    // if (result) {
-    //   console.log('=======containsTypeParameters=========', typhenType.rawName, typhenType.kind);
-    //   console.log('type %s containsTypeParameters: ', typhenType.rawName, result);
+    return false;
+    // let typhenType = this.typeCache.get(type);
+    // let sourceFiles = typhenType.declarationInfos.map(di => di.fileName);
+    // if (sourceFiles.length > 0 && !sourceFiles.some( this.anySourceFileMatches )) {
+    //   console.log('sourceFile excluded :', sourceFiles);
+    //   return false;
     // }
-    return result;
+    // let result = false;
+    // if (typhenType.kind === Symbol.SymbolKind.Interface) {
+    //   let fnc: Symbol.Function = typhenType as Symbol.Function;
+    //   if (typhenType.isGenericType) {
+    //     return true;
+    //   }
+    //   let paramKinds = fnc.callSignatures
+    //     .map(cs => cs.parameters)
+    //     .reduce((p1, p2) => p1.concat(p2), [])
+    //     .map(p => p.type).map(t => t.kind);
+    //   result = paramKinds.indexOf(Symbol.SymbolKind.TypeParameter) !== -1;
+    // }
+    // // if (result) {
+    // //   console.log('=======containsTypeParameters=========', typhenType.rawName, typhenType.kind);
+    // //   console.log('type %s containsTypeParameters: ', typhenType.rawName, result);
+    // // }
+    // return result;
   }
 
 
