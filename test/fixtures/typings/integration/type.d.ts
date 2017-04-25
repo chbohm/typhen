@@ -14,6 +14,7 @@ declare module Type {
     end: T;
     do(arg: T, done: SimpleResponse<TypedInterface<T>>): void
     doArray(arg: T[], done: SimpleResponse<TypedInterface<T[]>>): void
+    doArray2(done: SimpleResponse<TypedInterface<T>[]>): void
   }
 
   interface RangeChildNumber extends Range<Circle> {
