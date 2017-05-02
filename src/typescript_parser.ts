@@ -438,7 +438,12 @@ export default class TypeScriptParser {
     const typhenSymbol = this.getOrCreateTyphenModule(symbol);
 
     const isNamespaceModule = this.checkFlags(symbol.flags, ts.SymbolFlags.NamespaceModule);
-    const exportedSymbols = this.typeChecker.getExportsOfModule(symbol);
+    let exportedSymbols: ts.Symbol[];
+    try {
+          exportedSymbols = this.typeChecker.getExportsOfModule(symbol);
+    } catch (e) {
+      exportedSymbols = [];
+    }
     const modules = exportedSymbols
       .filter(s => this.checkFlags(s.flags, ts.SymbolFlags.Module))
       .map(s => this.parseModule(s));
