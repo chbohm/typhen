@@ -1,4 +1,4 @@
-# &quot;foobar&quot;
+# &#x27;foobar&#x27;
 
 No declarations.
 

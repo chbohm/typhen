@@ -82,7 +82,7 @@ No Imported Types.
 * IntersectionType
   * Type - AAndBAndCIntersectionType
 * stringLiteralType
-  * Type - &quot;foobar&quot;
+  * Type - &#x27;foobar&#x27;
 * booleanLiteralType
   * Type - true
 * numberLiteralType

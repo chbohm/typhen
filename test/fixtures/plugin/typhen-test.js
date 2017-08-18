@@ -17,6 +17,9 @@ module.exports = function(typhen, options) {
       if (symbol.kind === typhen.SymbolKind.Array) {
         return 'ArrayOf' + typhen.helpers.upperCamelCase(symbol.type.name);
       }
+      if (symbol.kind === typhen.SymbolKind.StringLiteralType) {
+        return `'${symbol.rawText}'`;
+      }
       return name;
     },
 
